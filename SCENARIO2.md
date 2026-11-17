@@ -1,4 +1,4 @@
-# Scénář
+# Scénář 2
 ```
 
 BenchmarkDotNet v0.15.8, Windows 11 (10.0.26200.9974/25H2/2025Update/HudsonValley2)
