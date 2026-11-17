@@ -22,7 +22,7 @@ Intel Core i7-8750H CPU 2.20GHz (Max: 2.21GHz) (Coffee Lake), 1 CPU, 12 logical 
 
 ## Metodika měření
 
-Benchmark porovnává tři přístupy k řešení kompletní úlohy *Četnosti slov* včetně finálního abecedního průchodu výslednými daty (simulovaného sečtením četností do proměnné `checksum`, což zároveň brání JIT kompilátoru v odstranění kódu).
+Benchmark porovnává tři přístupy k řešení kompletní úlohy *Četnosti slov* včetně finálního abecedního průchodu výslednými daty.
 
 Vstupní pole o délce 100 000 slov je připraveno v `[GlobalSetup]` pro dvě velikosti slovníku (`UniqueWords`):
 * **1 000 unikátních slov:** Vysoký podíl opakování (dominuje aktualizace četností).
@@ -32,12 +32,10 @@ Pro férové srovnání používá ex-post třídění u `Dictionary` stejný v�
 
 ## Analýza výsledků
 
-* **`Dictionary<string, int>` + ex-post `.Sort()` (nejrychlejší řešení):** Dosahuje času **4,271 ms** při 1 000 unikátních slovech a **28,502 ms** při 20 000 unikátních slovech. Během průchodu 100 000 slov probíhají vyhledávání i aktualizace v amortizovaném čase $O(1)$ pomocí hashe. Drahé lexikografické porovnávání řetězců (`Comparer<string>.Default`) se provede až **jednou na konci** při seřazení $U$ unikátních dvojic v čase $O(U \log U)$ nad souvislým polem v `List<T>` (Introsort), což výborně využívá CPU cache. Daní za rychlost je nejvyšší alokace paměti (115,59 KB resp. 2 225,07 KB), protože kromě interních polí slovníku alokujeme pomocný `List<KeyValuePair<string, int>>` pro setřídění.
-* **`SortedDictionary<string, int>` (6,7× až 22× pomalejší než baseline):** Časy **94,355 ms** (1 000 slov) a **186,341 ms** (20 000 slov). Jako červeno-černý strom má garantovanou složitost $O(\log U)$, ale provádí dvě průchodové operace stromem (`TryGetValue` + zápis indexerem) pro každé ze 100 000 slov na vstupu, přičemž v každém uzlu provádí kulturově závislé porovnání řetězců. Navíc každý uzel stromu je samostatný objekt na haldě, což způsobuje časté výpadky CPU cache (pointer chasing).
-* **`SortedList<string, int>` (nejpomalejší řešení):** Časy **115,068 ms** (1 000 slov) a **271,278 ms** (20 000 slov). Uvnitř udržuje dvě souvislá pole (`keys[]` a `values[]`), díky čemuž má nejnižší paměťovou náročnost (24,44 KB resp. 768,67 KB) a nejrychlejší finální sekvenční průchod. Při vkládání nového klíče doprostřed pole však musí posunout všechny následující prvky (`Array.Copy` v čase $O(U)$) a při každém slově provádí dvě binární vyhledávání v $O(\log U)$ s nákladným porovnáváním stringů.
-* **Proč relativní rozdíl klesá z ~27× na ~9,7×:** Celkový počet zpracovaných slov (100 000) zůstává stejný, takže `SortedList` i `SortedDictionary` provedou podobný řád porovnání řetězců (čas vzroste jen ~2× až 2,4×). U `Dictionary + Sort` ale při 20 000 unikátních slovech naroste režie zvětšování hashovací tabulky a především jednorázového setřídění 20× většího seznamu řetězců (čas vzroste ~6,7×). Přesto zůstává řádově rychlejší.
+* **`Dictionary<string, int>` + ex-post `.Sort()`:** Dosahuje času **4,271 ms** při 1 000 unikátních slovech a **28,502 ms** při 20 000 unikátních slovech. Během průchodu 100 000 slov probíhají vyhledávání i aktualizace v amortizovaném čase $O(1)$ pomocí hashe. Porovnávání řetězců se provede až **jednou na konci** při seřazení $U$ unikátních dvojic v čase $O(U \log U)$ nad souvislým polem v `List<T>`, což efektivně využívá CPU cache. Daní za rychlost je nejvyšší alokace paměti (115,59 KB resp. 2 225,07 KB).
+* **`SortedDictionary<string, int>`:** Časy **94,355 ms** (1 000 slov) a **186,341 ms** (20 000 slov). Jako červeno-černý strom má garantovanou složitost $O(\log U)$, ale provádí dvě průchodové operace stromem (`TryGetValue` + zápis indexerem) pro každé ze 100 000 slov na vstupu, přičemž v každém uzlu provádí porovnání řetězců.
+* **`SortedList<string, int>`:** Časy **115,068 ms** (1 000 slov) a **271,278 ms** (20 000 slov). Uvnitř udržuje dvě souvislá pole (`keys[]` a `values[]`), díky čemuž má nejnižší paměťovou náročnost (24,44 KB resp. 768,67 KB) a nejrychlejší finální sekvenční průchod. Při vkládání nového klíče doprostřed pole však musí posunout všechny následující prvky a při každém slově provádí dvě binární vyhledávání v $O(\log U)$ s nákladným porovnáváním stringů.
 
 ## Závěr pro úlohu Četnosti slov
 
-Pro reálné řešení úlohy *Četnosti slov* je jednoznačně nejlepší zvolit **`Dictionary<string, int>` v kombinaci s ex-post setříděním** (případně pro další zrychlení předat `StringComparer.Ordinal` tam, kde není vyžadováno kulturově závislé řazení). `SortedList` i `SortedDictionary` udržují uspořádání průběžně při každém ze $N$ vstupních slov, což je v situaci, kdy seřazený výstup potřebujeme až po načtení celého vstupu, zbytečná práce navíc.
-Odevzdej jako druhé odevzdání v ReCodExu s komentářem přesně Scénář 2.
+Pro reálné řešení úlohy *Četnosti slov* je jednoznačně nejlepší zvolit **`Dictionary<string, int>` v kombinaci s ex-post setříděním**. `SortedList` i `SortedDictionary` udržují uspořádání průběžně při každém ze $N$ vstupních slov, což je v situaci, kdy seřazený výstup potřebujeme až po načtení celého vstupu, zbytečná práce navíc.
